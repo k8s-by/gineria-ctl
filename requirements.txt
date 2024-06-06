@@ -1,0 +1,9 @@
+requests
+numpy
+pandas
+pandas_ta
+TA_Lib
+finta
+pybit
+pycryptodome
+scipy
