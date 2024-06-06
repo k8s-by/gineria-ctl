@@ -13,10 +13,10 @@ SLEEP_TIMEOUT = 900  # once in 15 min start script
 STOP_OFFSET = 0.001  # offset as 2.5% of the current price
 
 BOT_LIST = [
-    {
-        'symbol': 'DOGEUSDT',
-        'short_id': ''
-    },
+    # {
+    #     'symbol': 'DOGEUSDT',
+    #     'short_id': ''
+    # },
     {
         'symbol': '1000BONKUSDT',
         'long_id': '',
@@ -56,6 +56,8 @@ if __name__ == "__main__":
                 break
 
             idx = Indicators(df)
+
+            idx.macd_strategy(debug=True)
 
             # LONG BOT
             long_id = i.get('long_id')
