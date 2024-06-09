@@ -1,4 +1,5 @@
 import requests
+import jwt
 from requests.exceptions import HTTPError
 
 LOGIN_URL = 'https://ginarea.org/api/accounts/login'
@@ -49,6 +50,10 @@ class Ginarea():
         except Exception as err:
             print(f'Other error occurred: {err}')
 
+    def check_token(self):
+
+        return self
+
     def _get_bot_data(self, bot_id):
 
         bot_url = BOT_URL + bot_id
@@ -56,7 +61,8 @@ class Ginarea():
         try:
             response = self.session.request("Get", bot_url)
             data = response.json()
-            return data['name'], data['params']
+
+            return data['name'], data['params'], data['stat']
 
         except HTTPError as http_err:
             print(f'HTTP error occurred: {http_err}')
@@ -85,7 +91,7 @@ class Ginarea():
 
     def status(self, bot_id):
 
-        bot_name, bot_data = self._get_bot_data(bot_id)
+        bot_name, bot_data, _ = self._get_bot_data(bot_id)
 
         return {
             'name': bot_name,
@@ -96,17 +102,19 @@ class Ginarea():
 
     def stats(self, bot_id):
 
-        bot_name, bot_data = self._get_bot_data(bot_id)
+        bot_name, bot_data, bot_stats = self._get_bot_data(bot_id)
 
         return {
             'name': bot_name,
-            'profit': bot_data['stat']['profit'],
-            'currentProfit': bot_data['stat']['currentProfit']
+            'orderCount': bot_stats['triggerCount'],
+            'orderTotal': bot_data['maxOp'],
+            'profit': bot_stats['profit'],
+            'currentProfit': bot_stats['currentProfit']
         }
 
-    def update(self, bot_id, top=None, bottom=None, disable=None):
+    def update(self, bot_id, top=None, bottom=None, disable=None, orders=None):
 
-        bot_name, bot_data = self._get_bot_data(bot_id)
+        bot_name, bot_data, _ = self._get_bot_data(bot_id)
 
         if bot_data:
             if top:
@@ -117,6 +125,9 @@ class Ginarea():
 
             if disable is not None:
                 bot_data['dsblin'] = disable
+
+            if orders is not None:
+                bot_data['maxOp'] = orders
 
             if self._update_bot_data(bot_id, bot_data):
                 pass

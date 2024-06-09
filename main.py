@@ -1,30 +1,36 @@
 from api.ginarea import Ginarea
 from api.bybit import Bybit
 from lib.indicators import Indicators
+import datetime
 import time
 import os
 
 # Login and password in environment variables
-GINAREA_LOGIN = os.environ["GINAREA_LOGIN"]  # login email
-ENCRYPTED_PASSWORD = os.environ["GINAREA_PASSWORD"]  # This is not clear password. Get this value from F12 tools when login to gineria
 
-SLEEP_TIMEOUT = 900  # once in 15 min start script
+# login email
+GINAREA_LOGIN = os.environ["GINAREA_LOGIN"]
 
-STOP_OFFSET = 0.001  # offset as 2.5% of the current price
+# This is not clear password. Get this value from F12 tools when login to gineria
+ENCRYPTED_PASSWORD = os.environ["GINAREA_PASSWORD"]
+
+# Run the check once per SLEEP_TIME
+SLEEP_TIMEOUT = 300
+
+# Offset as 2.5% of the current price
+STOP_OFFSET = 0.001
 
 BOT_LIST = [
-    # {
-    #     'symbol': 'DOGEUSDT',
-    #     'short_id': ''
-    # },
     {
         'symbol': '1000BONKUSDT',
-        'long_id': '',
-        'short_id': ''
+        'long_id': '4399148790',
+        'short_id': '5177575237'
+    },
+    {
+        'symbol': 'KASUSDT',
+        'long_id': '6345446123',
+        'short_id': '5462860523'
     }
 ]
-
-
 
 '''
 ОБЯЗАТЕЛЬНО !!!
@@ -32,6 +38,8 @@ BOT_LIST = [
 В shot-боте "Order trading range/To"
 '''
 
+ARROW_UP = u'\u2191'
+ARROW_DOWN = u'\u2193'
 
 if __name__ == "__main__":
     # Connect to API
@@ -40,11 +48,15 @@ if __name__ == "__main__":
 
     # Connect to ginarea
     g = Ginarea(GINAREA_LOGIN, ENCRYPTED_PASSWORD)
+    # g.check_token()
+    # exit(0)
 
     while True:
         for i in BOT_LIST:
 
             symbol = i['symbol']
+
+            now = datetime.datetime.now()
 
             # Get 15m dataframe
             try:
@@ -57,7 +69,8 @@ if __name__ == "__main__":
 
             idx = Indicators(df)
 
-            idx.macd_strategy(debug=True)
+            data = idx.max('Close', 'pricemax').pivot(min_tick=0.0001).last()
+
 
             # LONG BOT
             long_id = i.get('long_id')
@@ -68,8 +81,14 @@ if __name__ == "__main__":
 
                     new_limit = idx.price() * (1.0 - STOP_OFFSET)
 
+                    # setup current price as limit
                     if bot['bottom'] < new_limit:
-                        print(f"Bot {bot['name']} updated, limit changed from {bot['bottom']:.6f} to {new_limit:.6f}")
+                        print(f"\"{now.strftime('%Y-%m-%d %H:%M:%S')}\" {bot['name']} updated {ARROW_UP} from {bot['bottom']} to {new_limit}")
+                        g.update(long_id, bottom=new_limit)
+
+                    # check pivot // long_pivot field
+                    if data['long_pivot'] == 1:
+                        print(f"\"{now.strftime('%Y-%m-%d %H:%M:%S')}\" {bot['name']} updated {ARROW_DOWN} from {bot['bottom']} to {new_limit}")
                         g.update(long_id, bottom=new_limit)
 
                 except Exception as e:
@@ -85,7 +104,12 @@ if __name__ == "__main__":
                     new_limit = idx.price() * (1.0 + STOP_OFFSET)
 
                     if bot['top'] > new_limit:
-                        print(f"Bot {bot['name']} updated, limit changed from {bot['top']:.6f} to {new_limit:.6f}")
+                        print(f"\"{now.strftime('%Y-%m-%d %H:%M:%S')}\" {bot['name']} updated {ARROW_DOWN} from {bot['top']} to {new_limit}")
+                        g.update(short_id, top=new_limit)
+
+                    # check pivot // short_pivot field
+                    if data['short_pivot'] == 1:
+                        print(f"\"{now.strftime('%Y-%m-%d %H:%M:%S')}\" {bot['name']} updated {ARROW_UP} from {bot['bottom']} to {new_limit}")
                         g.update(short_id, top=new_limit)
 
                 except Exception as e:
