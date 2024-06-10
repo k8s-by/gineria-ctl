@@ -94,23 +94,51 @@ class Indicators:
         pv["lprice"] = pv["lprice"].ffill().shift(right_bars).fillna(value=0)
 
         # Long crossover
+        # self.dataframe["long_pivot"] = np.where(
+        #         (self.dataframe['High'] >= pv['hprice'].shift(1) + min_tick)
+        #         &
+        #         (self.dataframe['High'].shift(1) < pv['hprice'].shift(2) + min_tick),
+        #         1.0, 0.0)
         self.dataframe["long_pivot"] = np.where(
-                (self.dataframe['High'] >= pv['hprice'].shift(1) + min_tick)
+                (self.dataframe['High'] >= pv['hprice'].shift(1))
                 &
-                (self.dataframe['High'].shift(1) < pv['hprice'].shift(2) + min_tick),
+                (self.dataframe['High'].shift(1) < pv['hprice'].shift(2)),
                 1.0, 0.0)
 
+        #self.dataframe["lprice"] = pv["lprice"]
+
+
+
         # Short crossover
-        self.dataframe["short_pivot"] =np.where (
-                (self.dataframe['Low'] <= pv['lprice'].shift(1) - min_tick)
+        # self.dataframe["short_pivot"] = np.where(
+        #         (self.dataframe['Low'] <= pv['lprice'].shift(1) - min_tick)
+        #         &
+        #         (self.dataframe['Low'].shift(1) > pv['lprice'].shift(2) - min_tick),
+        #         1.0, 0.0)
+        self.dataframe["short_pivot"] = np.where(
+                (self.dataframe['Low'] <= pv['lprice'].shift(1))
                 &
-                (self.dataframe['Low'].shift(1) > pv['lprice'].shift(2) - min_tick),
+                (self.dataframe['Low'].shift(1) > pv['lprice'].shift(2)),
                 1.0, 0.0)
+
+        #self.dataframe['hprice'] = pv["hprice"]
+
 
         # self.dataframe["trade_price"] = np.where(self.dataframe["long_pivot"],
         #                                          pv['hprice'] + min_tick,
         #                                          np.where(self.dataframe["short_pivot"],
         #                                          pv['lprice'] - min_tick, np.nan))
+
+        return self
+
+    def supertrend(self, length=10, multiplier=2, offset=0):
+
+        st = self.dataframe.ta.supertrend(length=length, multiplier=multiplier, offset=offset)
+
+        field_name = f"SUPERTd_{length}_{multiplier}.{offset}"
+
+        self.dataframe['long_supertrend'] = np.where((st[field_name] > st[field_name].shift(1)), 1.0, 0.0)
+        self.dataframe['short_supertrend'] = np.where((st[field_name] < st[field_name].shift(1)), 1.0, 0.0)
 
         return self
 
