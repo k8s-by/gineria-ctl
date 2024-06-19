@@ -31,8 +31,11 @@ class Indicators:
     def cci(self, length=14):
         return self.dataframe.ta.cci(length=length).iloc[-1]
 
-    def adx(self, lenght=14):
-        return self.dataframe.ta.adx(lenght=lenght).iloc[-1]
+    def adx(self, period=14, outbound_column='adx'):
+        # self.dataframe[outbound_column] = finta.ADX(self.dataframe, period=period)
+        self.dataframe[outbound_column] = ta.adx(self.dataframe['High'], self.dataframe['Low'], self.dataframe['Close'], length=period)[f"ADX_{period}"]
+
+        return self
 
     def bbands(self, period=20, std=2):
         bbands = finta.BBANDS(self.dataframe, period=20, std_multiplier=std)
@@ -93,6 +96,9 @@ class Indicators:
         pv["lprice"] = np.where(pv['swl_cond'], self.dataframe['Low'], np.nan)
         pv["lprice"] = pv["lprice"].ffill().shift(right_bars).fillna(value=0)
 
+        self.dataframe["lprice"] = self.dataframe['Low'].shift(-right_bars, fill_value=0).rolling(left_bars).min()
+        self.dataframe['hprice'] = self.dataframe['High'].shift(-right_bars, fill_value=0).rolling(left_bars).max()
+
         # Long crossover
         # self.dataframe["long_pivot"] = np.where(
         #         (self.dataframe['High'] >= pv['hprice'].shift(1) + min_tick)
@@ -100,14 +106,10 @@ class Indicators:
         #         (self.dataframe['High'].shift(1) < pv['hprice'].shift(2) + min_tick),
         #         1.0, 0.0)
         self.dataframe["long_pivot"] = np.where(
-                (self.dataframe['High'] >= pv['hprice'].shift(1))
-                &
-                (self.dataframe['High'].shift(1) < pv['hprice'].shift(2)),
-                1.0, 0.0)
-
-        #self.dataframe["lprice"] = pv["lprice"]
-
-
+            (self.dataframe['High'] >= pv['hprice'].shift(1))
+            &
+            (self.dataframe['High'].shift(1) < pv['hprice'].shift(2)),
+            1.0, 0.0)
 
         # Short crossover
         # self.dataframe["short_pivot"] = np.where(
@@ -116,13 +118,10 @@ class Indicators:
         #         (self.dataframe['Low'].shift(1) > pv['lprice'].shift(2) - min_tick),
         #         1.0, 0.0)
         self.dataframe["short_pivot"] = np.where(
-                (self.dataframe['Low'] <= pv['lprice'].shift(1))
-                &
-                (self.dataframe['Low'].shift(1) > pv['lprice'].shift(2)),
-                1.0, 0.0)
-
-        #self.dataframe['hprice'] = pv["hprice"]
-
+            (self.dataframe['Low'] <= pv['lprice'].shift(1))
+            &
+            (self.dataframe['Low'].shift(1) > pv['lprice'].shift(2)),
+            1.0, 0.0)
 
         # self.dataframe["trade_price"] = np.where(self.dataframe["long_pivot"],
         #                                          pv['hprice'] + min_tick,

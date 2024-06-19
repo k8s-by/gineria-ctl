@@ -1,6 +1,9 @@
 import requests
-import jwt
 from requests.exceptions import HTTPError
+from requests.adapters import HTTPAdapter, Retry
+import jwt
+from datetime import datetime
+from datetime import timedelta
 
 LOGIN_URL = 'https://ginarea.org/api/accounts/login'
 BOT_URL = 'https://ginarea.org/api/bots/'
@@ -8,7 +11,7 @@ BOT_URL = 'https://ginarea.org/api/bots/'
 
 class Ginarea():
 
-    def __init__(self, api_key="login", api_secret="encrypted_password"):
+    def __init__(self, api_key="login", api_secret="encrypted_password", retries=3):
         self.session = requests.Session()
         self.session.headers['Accept'] = 'application/json'
         self.session.headers['Origin'] = 'https://ginarea.org'
@@ -16,6 +19,11 @@ class Ginarea():
         self.session.headers['Content-Type'] = 'application/json'
         self.session.headers['cache-control'] = 'no-cache'
         self.session.headers['User-Agent'] = 'Mozilla/5.0 (X11; Linux x86_64) Chrome/122.0.0.0 Safari/537.36'
+
+        if retries > 0:
+            retries_strategy = Retry(total=retries, backoff_factor=0.5)
+
+            self.session.mount('https://ginarea.org', HTTPAdapter(max_retries=retries_strategy))
 
         self.token = None
 
@@ -45,18 +53,29 @@ class Ginarea():
             self.session.headers['Authorization'] = "Bearer " + self.token
 
         except HTTPError as http_err:
-            print(f'HTTP error occurred: {http_err}')
+            raise HTTPError from http_err
 
         except Exception as err:
-            print(f'Other error occurred: {err}')
+            raise Exception from err
 
-    def check_token(self):
+    def _token_expired(self):
+        decoded_token = jwt.decode(self.token,
+                                   algorithms=['HS256'],
+                                   options={'verify_signature': False}
+                                   )
+        token_expires_time = decoded_token.get('exp') - timedelta(minutes=15).total_seconds()
 
-        return self
+        if token_expires_time < datetime.now().timestamp():
+            return True
+
+        return False
 
     def _get_bot_data(self, bot_id):
 
         bot_url = BOT_URL + bot_id
+
+        if self._token_expired():
+            self._authenticate()
 
         try:
             response = self.session.request("Get", bot_url)
@@ -64,30 +83,39 @@ class Ginarea():
 
             return data['name'], data['params'], data['stat']
 
-        except HTTPError as http_err:
-            print(f'HTTP error occurred: {http_err}')
-
         except Exception as err:
-            print(f'Other error occurred: {err}')
-
-        return None
+            raise
 
     def _update_bot_data(self, bot_id, bot_data):
 
         bot_url = BOT_URL + bot_id + '/params'
 
+        if self._token_expired():
+            self._authenticate()
+
         try:
-            response = self.session.request("PUT", bot_url, json=bot_data)
+            response = self.session.request("PUT", bot_url, json=bot_data, timeout=3)
             response.raise_for_status()
             return True
 
-        except HTTPError as http_err:
-            print(f'HTTP error occurred: {http_err}')
+        except Exception as err:
+            raise
+
+    def order_list(self, bot_id):
+
+        bot_url = BOT_URL + bot_id + '/orders?pageSize=100&pageNumber=0&onlyOpened=true'
+
+        if self._token_expired():
+            self._authenticate()
+
+        try:
+            response = self.session.request("GET", bot_url)
+            response.raise_for_status()
+
+            return True
 
         except Exception as err:
-            print(f'Other error occurred: {err}')
-
-        return False
+            raise
 
     def status(self, bot_id):
 
@@ -129,11 +157,9 @@ class Ginarea():
             if orders is not None:
                 bot_data['maxOp'] = orders
 
-            if self._update_bot_data(bot_id, bot_data):
-                pass
-                # print(f"Bot {bot_name}/{bot_id} has been successfully updated")
-            else:
-                print(f"Failed to update bot {bot_id}")
+            self._update_bot_data(bot_id, bot_data)
+
+        return bot_name, bot_data
 
     def start(self, bot_id):
 
@@ -144,13 +170,8 @@ class Ginarea():
             response.raise_for_status()
             return True
 
-        except HTTPError as http_err:
-            print(f'HTTP error occurred: {http_err}')
-
         except Exception as err:
-            print(f'Other error occurred: {err}')
-
-        return False
+            raise
 
     def stop(self, bot_id):
 
@@ -161,13 +182,8 @@ class Ginarea():
             response.raise_for_status()
             return True
 
-        except HTTPError as http_err:
-            print(f'HTTP error occurred: {http_err}')
-
         except Exception as err:
-            print(f'Other error occurred: {err}')
-
-        return False
+            raise
 
     def close(self, bot_id):
 
@@ -178,10 +194,5 @@ class Ginarea():
             response.raise_for_status()
             return True
 
-        except HTTPError as http_err:
-            print(f'HTTP error occurred: {http_err}')
-
         except Exception as err:
-            print(f'Other error occurred: {err}')
-
-        return False
+            raise
