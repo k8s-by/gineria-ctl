@@ -13,14 +13,22 @@ class Indicators:
         return self.dataframe.iloc[-1]
 
     def resample(self, interval):
-        # TODO
-        return self.dataframe.resample(interval).last()
+
+        # return self.dataframe.resample(interval).last()
+
+        df = self.dataframe.resample(interval).agg({"Open": "first", "High": ["max"], "Low": ["min"],
+                                                    "Close": "last", "Volume": ["sum"]})
+
+        df.columns = ["Open", "High", "Low", "Close", "Volume"]
+        return df
 
     def price(self):
         return self.dataframe['Close'].iloc[-1]
 
-    def rsi(self, length=14):
-        return self.dataframe.ta.rsi(length=length).iloc[-1]
+    def rsi(self, period=14, outbound_column='rsi'):
+        self.dataframe[outbound_column] = self.dataframe.ta.rsi(length=period)
+
+        return self
 
     def mfi(self, length=14):
         return self.dataframe.ta.mfi(length=length).iloc[-1]
@@ -33,7 +41,59 @@ class Indicators:
 
     def adx(self, period=14, outbound_column='adx'):
         # self.dataframe[outbound_column] = finta.ADX(self.dataframe, period=period)
-        self.dataframe[outbound_column] = ta.adx(self.dataframe['High'], self.dataframe['Low'], self.dataframe['Close'], length=period)[f"ADX_{period}"]
+        self.dataframe[outbound_column] = ta.adx(self.dataframe['High'], self.dataframe['Low'], self.dataframe['Close'],
+                                                 length=period)[f"ADX_{period}"]
+
+        return self
+
+    def ema3tr_bands(self, ema1_period=21, ema2_period=9, ema3_period=150, atr_period=500,
+                     mult1=1.6, mult2=1.2, mult3=1.2, emashort_prefix='emashort', emalong_prefix='emalong'):
+
+        self.dataframe['range'] = ta.true_range(self.dataframe['High'], self.dataframe['Low'], self.dataframe['Close'])
+
+        self.ema(period=ema1_period, inbound_column='close', outbound_column='ema1_tmp')
+        self.ema(period=ema2_period, inbound_column='close', outbound_column='ema2_tmp')
+        self.ema(period=ema3_period, inbound_column='close', outbound_column='ema3_tmp')
+        self.ema(period=atr_period, inbound_column='range', outbound_column='emarange')
+
+        self.dataframe['ema1_upband'] = self.dataframe['ema1_tmp'] + self.dataframe['emarange'] * mult1
+        self.dataframe['ema1_downband'] = self.dataframe['ema1_tmp'] - self.dataframe['emarange'] * mult1
+
+        self.dataframe['ema2_upband'] = self.dataframe['ema2_tmp'] + self.dataframe['emarange'] * mult2
+        self.dataframe['ema2_downband'] = self.dataframe['ema2_tmp'] - self.dataframe['emarange'] * mult2
+        self.dataframe['ema3_upband'] = self.dataframe['ema3_tmp'] + self.dataframe['emarange'] * mult3
+        self.dataframe['ema3_downband'] = self.dataframe['ema3_tmp'] - self.dataframe['emarange'] * mult3
+
+        # max (ema2_downband, ema3_downband)
+        self.dataframe[f'{emalong_prefix}_down'] = np.where(
+            self.dataframe['ema2_downband'] > self.dataframe['ema3_downband'],
+            self.dataframe['ema2_downband'],
+            self.dataframe['ema3_downband']
+        )
+
+        # max (ema1, emalong_down)
+        self.dataframe[f'{emalong_prefix}_up'] = np.where(
+            self.dataframe['ema1_upband'] > self.dataframe[f'{emalong_prefix}_down'],
+            self.dataframe['ema1_upband'],
+            self.dataframe[f'{emalong_prefix}_down']
+        )
+
+        # min (ema2_upband, ema3_upband)
+        self.dataframe[f'{emashort_prefix}_down'] = np.where(
+            self.dataframe['ema2_upband'] < self.dataframe['ema3_upband'],
+            self.dataframe['ema2_upband'],
+            self.dataframe['ema3_upband']
+        )
+
+        # min (ema1_downband, emashort_up
+        self.dataframe[f'{emashort_prefix}_up'] = np.where(
+            self.dataframe['ema1_downband'] < self.dataframe[f'{emashort_prefix}_down'],
+            self.dataframe['ema1_downband'],
+            self.dataframe[f'{emashort_prefix}_down']
+        )
+
+        self.drop(columns=['range', 'emarange', 'ema1_tmp', 'ema2_tmp', 'ema3_tmp', 'ema1_upband', 'ema1_downband',
+                           'ema2_upband', 'ema2_downband', 'ema3_upband', 'ema3_downband'])
 
         return self
 
@@ -167,8 +227,8 @@ class Indicators:
                 self.dataframe['macdmin'].iloc[-1],
                 self.dataframe['macdmax'].iloc[-1])
 
-    def ema(self, period, outbound_column='ema'):
-        self.dataframe[outbound_column] = finta.EMA(self.dataframe, period, "close")
+    def ema(self, period, inbound_column='Close', outbound_column='ema'):
+        self.dataframe[outbound_column] = finta.EMA(self.dataframe, period=period, column=inbound_column)
 
         return self
 

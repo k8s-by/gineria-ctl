@@ -4,134 +4,150 @@ from lib.indicators import Indicators
 import os
 import time
 import datetime
+import asyncio
+from functools import wraps
+from loguru import logger
+from requests import HTTPError
 
 ARROW_UP = u'\u2191'
 ARROW_DOWN = u'\u2193'
 
 # Login and password in environment variables
-GINAREA_LOGIN = os.environ["GINAREA_LOGIN"]  # login email
-ENCRYPTED_PASSWORD = os.environ["GINAREA_PASSWORD"]  # This is not clear password. Get this value from F12 tools when login to gineria
+GINAREA_LOGIN = os.environ["GINAREA_LOGIN"]
+ENCRYPTED_PASSWORD = os.environ["GINAREA_PASSWORD"]
 
-SLEEP_TIMEOUT = 900  # once in 15 min start script
+SLEEP_TIMEOUT = 300
 
-STOP_OFFSET = 0.000  # offset as 2.5% of the current price
+STOP_OFFSET = 0.000
 
 BOT_LIST = [
     {
-        'symbol': '1000BONKUSDT',
-        'long_id': '4399148790',
-        'short_id': '5177575237',
-        'strategy': 'supertrend'
+        'symbol': 'CHZUSDT',
+        'long_id': '5879141682',
+        'strategy': 'ema_bands'
     },
     {
-        'symbol': 'KASUSDT',
-        'long_id': '6345446123',
-        'short_id': '5462860523',
-        'strategy': 'pivot'
-    }
+        'symbol': 'GALAUSDT',
+        'long_id': '5992216014',
+        'strategy': 'ema_bands'
+    },
+    {
+        'symbol': 'WLDUSDT',
+        'long_id': '5755294292',
+        'strategy': 'ema_bands'
+    },
 ]
 
 
+def timeit(func):
+    async def process(func, *args, **kwargs):
+        if asyncio.iscoroutinefunction(func):
+            return await func(*args, **kwargs)
+        else:
+            return func(*args, **kwargs)
 
-'''
-ОБЯЗАТЕЛЬНО !!!
-В long-боте должен быть установлен "Order trading range/From" (любое числовое значение)
-В shot-боте "Order trading range/To"
-'''
+    @wraps(func)
+    async def wrapper(*args, **kwargs):
+        st = time.time()
+        result = await process(func, *args, **kwargs)
+        ed = time.time()
+        logger.info(f"{func.__name__} took time: {ed - st:.3f} secs")
+        return result
+
+    return wrapper
 
 
-if __name__ == "__main__":
+def get_data(api, symbol, interval='1', limit=200, category='linear'):
+    try:
+        # Get data from bybit for tf=5min, last 200 kline in usdt_features. Use category='spot' for spot data.
+        df = api.get_dataframe(symbol, interval='5', limit=500, category='linear')
+
+    except Exception as e:
+        logger.error(f"Failed to get {symbol} prices {e}")
+        return None
+
+    idx = Indicators(df)
+
+    data = (idx.ema3tr_bands(ema1_period=21, ema2_period=9, ema3_period=150, atr_period=500,
+                             mult1=1.6, mult2=1.2, mult3=1.2)
+            .rsi()
+            .last())
+
+    return data
+
+
+def long_bot_update(g, df, symbol, bot_id, strategy='ema_band'):
+    try:
+        bot = g.status(bot_id)
+
+        logger.info(
+            f"[{strategy}] {bot['name']} updated from {bot['bottom']:.4f}->{df['emalong_down']:.4f}  {bot['top']:.4f}->{df['emalong_up']:.4f}")
+        g.update(bot_id, bottom=df['emalong_down'], top=df['emalong_up'])
+
+    except Exception as e:
+        logger.error(f"Failed to update bot id {symbol}/{bot_id}: {e}")
+
+
+def short_bot_update(g, data, symbol, bot_id, strategy='supertrend'):
+    try:
+        bot = g.status(bot_id)
+
+        # TODO
+
+    except Exception as e:
+        logger.error(f"Failed to update bot id {symbol}/{bot_id}: {e}")
+
+
+async def bot_update(i):
     # Connect to API
     api = Bybit()
     api.connect_to_api("Key", "Secret")
 
     # Connect to ginarea
-    g = Ginarea(GINAREA_LOGIN, ENCRYPTED_PASSWORD)
-    # g.check_token()
-    # exit(0)
+    g = Ginarea(GINAREA_LOGIN, ENCRYPTED_PASSWORD, retries=3)
+
+    symbol = i['symbol']
+    strategy = i['strategy']
+    long_id = i.get('long_id')
+    short_id = i.get('short_id')
+
+    logger.info(f"Thread of {symbol} started")
 
     while True:
-        for i in BOT_LIST:
+        start_time = time.time()
 
-            symbol = i['symbol']
-            strategy = i['strategy']
+        # get data
+        data = get_data(api, symbol)
 
-            now = datetime.datetime.now()
+        # long bot update
+        if long_id is not None:
+            long_bot_update(g, data, symbol, long_id, strategy)
 
-            # Get 15m dataframe
-            try:
-                # Get data from bybit for tf=15min, last 200 kline in usdt_features. Use category='spot' for spot data.
-                df = api.get_dataframe(symbol, interval='15', limit=200, category='linear')
+        # short bot update
+        if short_id is not None:
+            short_bot_update(g, data, symbol, short_id, strategy)
 
-            except Exception as e:
-                print(f"Failed to get {symbol} prices {e}")
-                break
+        # measure runtime and sleep
+        run_time = time.time() - start_time
 
-            idx = Indicators(df)
+        if run_time < SLEEP_TIMEOUT:
+            # time.sleep(SLEEP_TIMEOUT - run_time)
 
-            data = idx.pivot(left_bars=4, right_bars=2).supertrend(length=10, multiplier=3).last()
-
-            # LONG BOT
-            long_id = i.get('long_id')
-            if long_id is not None:
-
-                try:
-                    bot = g.status(long_id)
-
-                    price = idx.price()
-                    new_limit = price * (1.0 - STOP_OFFSET)
-
-                    # check pivot // long_pivot field
-                    if strategy == 'pivot' and data['long_pivot'] == 1:
-                        print(
-                            f"\"{now.strftime('%Y-%m-%d %H:%M:%S')}\" [{strategy}] {bot['name']} updated {ARROW_DOWN} from {bot['bottom']} to {data['High']}")
-                        g.update(long_id, bottom=data['High'])
-
-                    # check supertrend
-                    elif strategy == 'supertend' and data['long_supertrend'] == 1:
-                        print(
-                            f"\"{now.strftime('%Y-%m-%d %H:%M:%S')}\" [{strategy}] {bot['name']} updated {ARROW_DOWN} from {bot['bottom']} to {data['High']}")
-                        g.update(long_id, bottom=data['High'])
-
-                    # setup current price as limit
-                    elif bot['bottom'] < new_limit:
-                        print(
-                            f"\"{now.strftime('%Y-%m-%d %H:%M:%S')}\" [price] {bot['name']} updated {ARROW_UP} from {bot['bottom']} to {new_limit}")
-                        g.update(long_id, bottom=new_limit)
-
-                except Exception as e:
-                    print(f"Failed to update bot id {symbol}/{long_id}: {e}")
-
-            # SHORT BOT
-            short_id = i.get('short_id')
-            if short_id is not None:
-
-                try:
-                    bot = g.status(short_id)
-
-                    price = idx.price()
-                    new_limit = price * (1.0 + STOP_OFFSET)
-
-                    # check pivot // short_pivot field
-                    if strategy == 'pivot' and data['short_pivot'] == 1:
-                        print(
-                            f"\"{now.strftime('%Y-%m-%d %H:%M:%S')}\" [{strategy}]  {bot['name']} updated {ARROW_UP} from {bot['top']} to {data['Low']}")
-                        g.update(short_id, top=data['Low'])
-
-                    # check supertrend
-                    elif strategy == 'supertend' and data['short_supertrend'] == 1:
-                        print(
-                            f"\"{now.strftime('%Y-%m-%d %H:%M:%S')}\" [{strategy}] {bot['name']} updated {ARROW_UP} from {bot['top']} to {data['Low']}")
-                        g.update(long_id, top=data['Low'])
-
-                    elif bot['top'] > new_limit:
-                        print(
-                            f"\"{now.strftime('%Y-%m-%d %H:%M:%S')}\" [price] {bot['name']} updated {ARROW_DOWN} from {bot['top']} to {new_limit}")
-                        g.update(short_id, top=new_limit)
-
-                except Exception as e:
-                    print(f"Failed to update bot id {symbol}/{short_id}: {e}")
-
-        time.sleep(SLEEP_TIMEOUT)
+            await asyncio.sleep(SLEEP_TIMEOUT)
 
 
+async def main():
+    tasks = []
+
+    for i in BOT_LIST:
+        tasks.append(bot_update(i))
+
+    await asyncio.gather(*tasks)
+
+
+if __name__ == "__main__":
+    logger.add('main1.log', retention='10d')
+
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(main())
+    loop.close()
