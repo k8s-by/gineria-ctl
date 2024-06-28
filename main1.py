@@ -29,11 +29,48 @@ BOT_LIST = [
     {
         'symbol': 'GALAUSDT',
         'long_id': '5992216014',
+        'short_id': '6013514960',
         'strategy': 'ema_bands'
     },
     {
         'symbol': 'WLDUSDT',
         'long_id': '5755294292',
+        'short_id': '5349821704',
+        'strategy': 'ema_bands'
+    },
+    {
+        'symbol': 'FILUSDT',
+        'long_id': '6288149943',
+        'strategy': 'ema_bands'
+    },
+    {
+        'symbol': 'DOGEUSDT',
+        'long_id': '5077261714',
+        'strategy': 'ema_bands'
+    },
+    {
+        'symbol': '1000BONKUSDT',
+        'long_id': '4399148790',
+        'strategy': 'ema_bands'
+    },
+    {
+        'symbol': 'SUIUSDT',
+        'long_id': '5869974617',
+        'strategy': 'ema_bands'
+    },
+    {
+        'symbol': 'LDOUSDT',
+        'long_id': '4823382912',
+        'strategy': 'ema_bands'
+    },
+    {
+        'symbol': '1000BONKUSDT',
+        'long_id': '4399148790',
+        'strategy': 'ema_bands'
+    },
+    {
+        'symbol': 'SHIB1000USDT',
+        'long_id': '4643139343',
         'strategy': 'ema_bands'
     },
 ]
@@ -76,7 +113,7 @@ def get_data(api, symbol, interval='1', limit=200, category='linear'):
     return data
 
 
-def long_bot_update(g, df, symbol, bot_id, strategy='ema_band'):
+def long_bot_update(g, df, symbol, bot_id, strategy='ema_bands'):
     try:
         bot = g.status(bot_id)
 
@@ -88,11 +125,13 @@ def long_bot_update(g, df, symbol, bot_id, strategy='ema_band'):
         logger.error(f"Failed to update bot id {symbol}/{bot_id}: {e}")
 
 
-def short_bot_update(g, data, symbol, bot_id, strategy='supertrend'):
+def short_bot_update(g, df, symbol, bot_id, strategy='ema_bands'):
     try:
         bot = g.status(bot_id)
 
-        # TODO
+        logger.info(
+            f"[{strategy}] {bot['name']} updated from {bot['bottom']:.4f}->{df['emashort_up']:.4f}  {bot['top']:.4f}->{df['emashort_down']:.4f}")
+        g.update(bot_id, bottom=df['emashort_up'], top=df['emashort_down'])
 
     except Exception as e:
         logger.error(f"Failed to update bot id {symbol}/{bot_id}: {e}")
