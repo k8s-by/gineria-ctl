@@ -46,6 +46,46 @@ class Indicators:
 
         return self
 
+    def ema2_bands(self, ema1_period=21, ema2_period=150, atr_period=500, mult1=1.6, mult2=1.2):
+
+        self.dataframe['range'] = ta.true_range(self.dataframe['High'], self.dataframe['Low'], self.dataframe['Close'])
+
+        self.ema(period=ema1_period, inbound_column='close', outbound_column='ema1_tmp')
+        self.ema(period=ema2_period, inbound_column='close', outbound_column='ema2_tmp')
+        self.ema(period=atr_period, inbound_column='range', outbound_column='emarange')
+
+        self.dataframe['ema1_upband'] = self.dataframe['ema1_tmp'] + self.dataframe['emarange'] * mult1
+        self.dataframe['ema1_downband'] = self.dataframe['ema1_tmp'] - self.dataframe['emarange'] * mult1
+
+        self.dataframe['ema2_upband'] = self.dataframe['ema2_tmp'] + self.dataframe['emarange'] * mult2
+        self.dataframe['ema2_downband'] = self.dataframe['ema2_tmp'] - self.dataframe['emarange'] * mult2
+
+
+        # max (ema1_downband, ema2_downband)
+        self.dataframe['ema_down'] = np.where(
+            self.dataframe['ema1_downband'] > self.dataframe['ema2_downband'],
+            self.dataframe['ema1_downband'],
+            self.dataframe['ema2_downband']
+        )
+
+        # min (ema1_upband, ema2_upband)
+        self.dataframe['ema_up'] = np.where(
+            self.dataframe['ema1_upband'] < self.dataframe['ema2_upband'],
+            self.dataframe['ema1_upband'],
+            self.dataframe['ema2_upband']
+        )
+
+        self.dataframe['ema_up'] = np.where(
+            self.dataframe['ema_up'] > self.dataframe['ema_down'],
+            self.dataframe['ema_up'],
+            self.dataframe['ema_down']
+        )
+
+        self.drop(columns=['range', 'emarange', 'ema1_tmp', 'ema2_tmp', 'ema1_upband', 'ema1_downband', 'ema2_upband',
+                           'ema2_downband'])
+
+        return self
+
     def ema3tr_bands(self, ema1_period=21, ema2_period=9, ema3_period=150, atr_period=500,
                      mult1=1.6, mult2=1.2, mult3=1.2, emashort_prefix='emashort', emalong_prefix='emalong'):
 
