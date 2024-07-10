@@ -21,7 +21,7 @@ class Ginarea():
         self.session.headers['User-Agent'] = 'Mozilla/5.0 (X11; Linux x86_64) Chrome/122.0.0.0 Safari/537.36'
 
         if retries > 0:
-            retries_strategy = Retry(total=retries, backoff_factor=0.5)
+            retries_strategy = Retry(total=retries, backoff_factor=2)
 
             self.session.mount('https://ginarea.org', HTTPAdapter(max_retries=retries_strategy))
 
@@ -125,7 +125,9 @@ class Ginarea():
             'name': bot_name,
             'bottom': bot_data['border']['bottom'],
             'top': bot_data['border']['top'],
-            'dsblin': bot_data['dsblin']
+            'gridstep': bot_data['gs'],
+            'dsblin': bot_data['dsblin'],
+            'mode': bot_data['mode']
         }
 
     def stats(self, bot_id):
@@ -135,12 +137,13 @@ class Ginarea():
         return {
             'name': bot_name,
             'orderCount': bot_stats['triggerCount'],
+            'gridstep': bot_data['gs'],
             'orderTotal': bot_data['maxOp'],
             'profit': bot_stats['profit'],
             'currentProfit': bot_stats['currentProfit']
         }
 
-    def update(self, bot_id, top=None, bottom=None, disable=None, orders=None):
+    def update(self, bot_id, top=None, bottom=None, disable=None, orders=None, gridstep=None, mode=None):
 
         bot_name, bot_data, _ = self._get_bot_data(bot_id)
 
@@ -156,6 +159,12 @@ class Ginarea():
 
             if orders is not None:
                 bot_data['maxOp'] = orders
+
+            if gridstep is not None:
+                bot_data['gs'] = gridstep
+
+            if mode is not None:
+                bot_data['mode'] = mode
 
             self._update_bot_data(bot_id, bot_data)
 
