@@ -127,7 +127,7 @@ class Ginarea():
             'top': bot_data['border']['top'],
             'gridstep': bot_data['gs'],
             'dsblin': bot_data['dsblin'],
-            'mode': bot_data['mode']
+            'mode': bot_data.get('mode'),
         }
 
     def stats(self, bot_id):
@@ -140,7 +140,8 @@ class Ginarea():
             'gridstep': bot_data['gs'],
             'orderTotal': bot_data['maxOp'],
             'profit': bot_stats['profit'],
-            'currentProfit': bot_stats['currentProfit']
+            'currentProfit': bot_stats['currentProfit'],
+            'averagePrice': bot_data.get('averagePrice')
         }
 
     def update(self, bot_id, top=None, bottom=None, disable=None, orders=None, gridstep=None, mode=None):

@@ -60,7 +60,6 @@ class Indicators:
         self.dataframe['ema2_upband'] = self.dataframe['ema2_tmp'] + self.dataframe['emarange'] * mult2
         self.dataframe['ema2_downband'] = self.dataframe['ema2_tmp'] - self.dataframe['emarange'] * mult2
 
-
         # max (ema1_downband, ema2_downband)
         self.dataframe['ema_down'] = np.where(
             self.dataframe['ema1_downband'] > self.dataframe['ema2_downband'],
@@ -151,14 +150,18 @@ class Indicators:
 
     def keltner(self, period=20, atr_period=10, kc_mult=2):
 
-        kc = finta.KC(self.dataframe, period=period, atr_period=atr_period, kc_mult=kc_mult)
-        self.dataframe['kc_upper'] = kc['KC_UPPER']
-        self.dataframe['kc_lower'] = kc['KC_LOWER']
+        # kc = finta.KC(self.dataframe, period=period, atr_period=atr_period, kc_mult=kc_mult)
+        # print(kc)
+        # self.dataframe['kc_upper'] = kc['KC_UPPER']
+        # self.dataframe['kc_lower'] = kc['KC_LOWER']
+        kc = ta.kc(self.dataframe['High'], self.dataframe['Low'], self.dataframe['Close'], length=period, scalar=kc_mult)
 
-        self.cross('kc_upper', 'Close', 'kc_upper_cross')
-        self.cross('Close', 'kc_lower', 'kc_lower_cross')
+        self.dataframe['kc_center'] = kc[f'KCBe_{period}_{kc_mult}.0']
 
-        self.drop(columns=['kc_upper', 'kc_lower'])
+        # self.cross('kc_upper', 'Close', 'kc_upper_cross')
+        # self.cross('Close', 'kc_lower', 'kc_lower_cross')
+        #
+        # self.drop(columns=['kc_upper', 'kc_lower'])
 
         return self
 

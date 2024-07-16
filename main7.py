@@ -22,57 +22,14 @@ STOP_OFFSET = 0.000
 
 BOT_LIST = [
     {
-        'symbol': 'WLD-USDT-SWAP',
-        'long_id': '5755294292',
+        'symbol': 'ETH-USDT-SWAP',
+        'long_id': '4396470606',
         'strategy': 'ema_bands',
-        'min_orders': 110,
-        'max_orders': 130,
-        'order_step': 20,
+        'min_orders': 40,
+        'max_orders': 40,
+        'order_step': 10,
         'autogrid': False
     },
-    {
-        'symbol': 'SUI-USDT-SWAP',
-        'long_id': '5869974617',
-        'strategy': 'ema_bands',
-        'min_orders': 60,
-        'max_orders': 120,
-        'order_step': 20,
-        'autogrid': False
-    },
-    {
-        'symbol': 'BONK-USDT-SWAP',
-        'long_id': '5455385301',
-        'strategy': 'ema_bands',
-        'min_orders': 80,
-        'max_orders': 200,
-        'order_step': 40,
-        'autogrid': True,
-        'min_gridstep': 0.03,
-        'max_gridstep': 0.05
-    },
-    {
-        'symbol': 'UNI-USDT-SWAP',
-        'long_id': '6098517859',
-        'strategy': 'ema_bands',
-        'min_orders': 50,
-        'max_orders': 150,
-        'order_step': 25,
-        'autogrid': True,
-        'min_gridstep': 0.04,
-        'max_gridstep': 0.06
-    },
-    {
-        'symbol': 'SHIB-USDT-SWAP',
-        'long_id': '6194431068',
-        'strategy': 'ema_bands',
-        'min_orders': 50,
-        'max_orders': 150,
-        'order_step': 25,
-        'autogrid': True,
-        'min_gridstep': 0.04,
-        'max_gridstep': 0.06
-    }
-
 ]
 
 
@@ -105,7 +62,7 @@ def get_data(api, symbol, interval='1', limit=200, category='linear'):
 
     idx = Indicators(df)
 
-    data = (idx.ema3tr_bands(ema1_period=21, ema2_period=9, ema3_period=40, atr_period=300,
+    data = (idx.ema3tr_bands(ema1_period=21, ema2_period=21, ema3_period=21, atr_period=300,
                              mult1=1.6, mult2=1.6, mult3=1.6)
             .rsi()
             .last())
@@ -176,17 +133,11 @@ async def bot_update(i):
 
         # long bot update
         if long_id is not None:
-            try:
-                long_bot_update(g, data, symbol, long_id, strategy)
-            except Exception as e:
-                logger.error(f"Failed to update bot id {symbol}/{long_id}: {e}")
+            long_bot_update(g, data, symbol, long_id, strategy)
 
         # short bot update
         if short_id is not None:
-            try:
-                short_bot_update(g, data, symbol, short_id, strategy)
-            except Exception as e:
-                logger.error(f"Failed to update bot id {symbol}/{short_id}: {e}")
+            short_bot_update(g, data, symbol, short_id, strategy)
 
         # measure runtime and sleep
         run_time = time.time() - start_time
@@ -214,33 +165,29 @@ async def order_update(i):
 
         # long bot order number update
         if long_id is not None:
-            try:
-                bot = g.stats(long_id)
+            bot = g.stats(long_id)
 
-                if bot['orderCount'] >= bot['orderTotal']:
+            if bot['orderCount'] >= bot['orderTotal']:
 
-                    if bot['orderTotal'] >= max_orders:
-                        logger.error(
-                            f"Bot {bot['name']} has reached order limit. Increasing not possible."
-                        )
+                if bot['orderTotal'] >= max_orders:
+                    logger.error(
+                        f"Bot {bot['name']} has reached order limit. Increasing not possible."
+                    )
 
-                    else:
-                        logger.info(
-                            f"Bot {bot['name']} orderTotal increased from {bot['orderTotal']} to {bot['orderTotal'] + order_step}")
-
-                        g.update(long_id, orders=bot['orderTotal'] + order_step)
-
-                elif (bot['orderCount'] < (bot['orderTotal'] - order_step * 1.5)
-                      and
-                      (bot['orderTotal'] - order_step > min_orders)):
-
+                else:
                     logger.info(
-                        f"Bot {bot['name']} decreasing orderTotal from {bot['orderTotal']} to {bot['orderTotal'] - order_step}")
+                        f"Bot {bot['name']} orderTotal increased from {bot['orderTotal']} to {bot['orderTotal'] + order_step}")
 
-                    g.update(long_id, orders=bot['orderTotal'] - order_step)
+                    g.update(long_id, orders=bot['orderTotal'] + order_step)
 
-            except Exception as e:
-                logger.error(f"Failed to update bot id {symbol}/{long_id}: {e}")
+            elif (bot['orderCount'] < (bot['orderTotal'] - order_step * 1.5)
+                  and
+                  (bot['orderTotal'] - order_step > min_orders)):
+
+                logger.info(
+                    f"Bot {bot['name']} decreasing orderTotal from {bot['orderTotal']} to {bot['orderTotal'] - order_step}")
+
+                g.update(long_id, orders=bot['orderTotal'] - order_step)
 
         # short bot order number update
         # TODO
@@ -264,30 +211,26 @@ async def gridstep_update(i):
 
         while True:
 
-            try:
-                api = OKX()
-                api.connect_to_api("-1", "-1")
+            api = OKX()
+            api.connect_to_api("-1", "-1")
 
-                # long bot order number update
-                if long_id is not None:
+            # long bot order number update
+            if long_id is not None:
 
-                    data = get_data_1h(api, symbol)
-                    bot = g.stats(long_id)
+                data = get_data_1h(api, symbol)
+                bot = g.stats(long_id)
 
-                    if data['Close'] > data['kc_center']:
-                        if bot['gridstep'] != max_gridstep:
-                            logger.warning(
-                                f"Bot {bot['name']} gridstep updated to {max_gridstep}")
-                            g.update(long_id, gridstep=max_gridstep)
+                if data['Close'] > data['kc_center']:
+                    if bot['gridstep'] != max_gridstep:
+                        logger.warning(
+                            f"Bot {bot['name']} gridstep updated to {max_gridstep}")
+                        g.update(long_id, gridstep=max_gridstep)
 
-                    else:
-                        if bot['gridstep'] != min_gridstep:
-                            logger.warning(
-                                f"Bot {bot['name']} gridstep updated to {min_gridstep}")
-                            g.update(long_id, gridstep=min_gridstep)
-
-            except Exception as e:
-                logger.error(f"Failed to update bot id {symbol}/{long_id}: {e}")
+                else:
+                    if bot['gridstep'] != min_gridstep:
+                        logger.warning(
+                            f"Bot {bot['name']} gridstep updated to {min_gridstep}")
+                        g.update(long_id, gridstep=min_gridstep)
 
             # short bot order number update
             # TODO
